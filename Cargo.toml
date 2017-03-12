@@ -1,6 +1,9 @@
 [package]
+authors = ["realityone <realityone@me.com>"]
 name = "raproxy"
 version = "0.1.0"
-authors = ["realityone <realityone@me.com>"]
 
 [dependencies]
+clap = "2.20.5"
+libc = "0.2.21"
+nix = "0.8.0"
