@@ -60,7 +60,7 @@ fn main() {
             .required(true)
             .multiple(true))
         .get_matches();
-    let config = Config {
+    let mut config = Config {
         haproxy: &Path::new(matches.value_of("haproxy").unwrap()),
         config: &Path::new(matches.value_of("cfg").unwrap()),
         pid: &Path::new(matches.value_of("pid").unwrap()),
@@ -73,7 +73,7 @@ fn main() {
             .collect(),
     };
     loop {
-        let mut process = haproxy_process(&config).expect("Create haproxy process failed");
+        let mut process = haproxy_process(&mut config).expect("Create haproxy process failed");
         let mut child = process.spawn().expect("Spawn haproxy process failed");
         let exit_code = child.wait().expect("HAProxy process wasn't running");
         println!("HAProxy process exit with code: {}", exit_code);

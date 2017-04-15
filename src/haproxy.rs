@@ -48,14 +48,18 @@ impl Listener {
     }
 }
 
-pub fn haproxy_process(cfg: &Config) -> Result<Command, HAProxyProcessError> {
+pub fn haproxy_process(cfg: &mut Config) -> Result<Command, HAProxyProcessError> {
     let mut haproxy = Command::new(cfg.haproxy.as_os_str());
     haproxy.arg("-f").arg(cfg.config.as_os_str());
 
-    for (_, service_spec) in &cfg.services {
-        let fd = try!(Listener::listen(&service_spec)
-            .map_err(HAProxyProcessError::CreateHAProxyFailed));
-        haproxy.env(service_spec.name.clone(), format!("{}", fd));
+    for (_, mut service_spec) in &mut cfg.services {
+        if service_spec.fd.is_none() {
+            let fd = try!(Listener::listen(&service_spec)
+                .map_err(HAProxyProcessError::CreateHAProxyFailed));
+            service_spec.fd = Some(fd);
+        }
+        haproxy.env(service_spec.name.clone(),
+                    format!("{}", service_spec.fd.unwrap()));
     }
     Ok(haproxy)
 }
