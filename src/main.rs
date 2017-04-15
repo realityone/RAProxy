@@ -75,7 +75,7 @@ fn main() {
     loop {
         let mut process = haproxy_process(&mut config).expect("Create haproxy process failed");
         let mut child = process.spawn().expect("Spawn haproxy process failed");
-        let exit_code = child.wait().expect("HAProxy process wasn't running");
+        let exit_status = child.wait().expect("HAProxy process wasn't running");
         println!("HAProxy process exit with code: {}", exit_code);
     }
 }
