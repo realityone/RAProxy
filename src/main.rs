@@ -2,63 +2,106 @@ extern crate libc;
 extern crate clap;
 extern crate nix;
 
-use std::process::Command;
-use nix::sys::socket;
-use nix::sys::socket::bind;
-use nix::sys::socket::SockAddr;
-use nix::sys::socket::{InetAddr, UnixAddr, getsockname};
-use nix::sys::socket::SetSockOpt;
+use std::path::Path;
 use std::str::FromStr;
 use std::net::SocketAddr;
-// use std::os::unix::io::AsRawFd;
-// use time::Duration;
-// use clap::{App, Arg};
+use clap::{App, Arg};
 
-// fn cli_app() {
-//     let matches = App::new("RAProxy")
-//         .version("0.1")
-//         .about("HAProxy reload helper.")
-//         .author("realityone.")
-//         .arg(Arg::with_name("haproxy")
-//             .help("The HAProxy binary path.")
-//             .long("haproxy")
-//             .short("b")
-//             .takes_value(true)
-//             .required(true))
-//         .arg(Arg::with_name("cfg")
-//             .help("The HAProxy config path.")
-//             .long("config")
-//             .short("c")
-//             .takes_value(true)
-//             .required(true))
-//         .get_matches();
-// }
+#[derive(Debug)]
+struct Config<'a> {
+    haproxy: &'a Path,
+    config: &'a Path,
+    binds: Vec<BindSpec>,
+}
+
+#[derive(Debug)]
+struct BindSpec {
+    addr: SocketAddr,
+    backlog: usize,
+}
+
+const DEFAULT_BACKLOG: usize = 1000;
+#[derive(Debug)]
+enum BindSpecError {
+    BindSpecInvalid,
+}
+
+fn path_validator(v: String) -> Result<(), String> {
+    let path = Path::new(&v);
+    if !path.is_file() {
+        return Err(format!("Path `{}` is not a regular file", v));
+    }
+    if !path.exists() {
+        return Err(format!("Path `{}` is not exist", v));
+    }
+    Ok(())
+}
+
+impl FromStr for BindSpec {
+    type Err = BindSpecError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if !s.contains(",") {
+            let sa = SocketAddr::from_str(&s);
+            if sa.is_err() {
+                return Err(BindSpecError::BindSpecInvalid);
+            }
+            return Ok(BindSpec {
+                addr: sa.unwrap(),
+                backlog: DEFAULT_BACKLOG,
+            });
+        }
+        let splited: Vec<&str> = s.splitn(2, ",").collect();
+        let sa = SocketAddr::from_str(splited[0]);
+        let bl = usize::from_str(splited[1]);
+        if sa.is_err() || bl.is_err() {
+            return Err(BindSpecError::BindSpecInvalid);
+        }
+        Ok(BindSpec {
+            addr: sa.unwrap(),
+            backlog: bl.unwrap(),
+        })
+    }
+}
 
 fn main() {
-    let raw_fd = socket::socket(socket::AddressFamily::Inet,
-                                socket::SockType::Stream,
-                                socket::SockFlag::empty(),
-                                0)
-        .unwrap();
-
-    let opt = socket::sockopt::ReuseAddr {};
-    opt.set(raw_fd, &true);
-
-    let actual: SocketAddr = FromStr::from_str("0.0.0.0:7878").unwrap();
-    let addr = InetAddr::from_std(&actual);
-    let sa = SockAddr::new_inet(addr);
-
-    bind(raw_fd, &sa).unwrap();
-
-    let mut child = Command::new("/usr/local/bin/haproxy")
-        .arg("-f")
-        .arg("/Users/realityone/Softs/raproxy/hap.cfg")
-        .env("APP_FD", format!("{}", raw_fd))
-        .spawn()
-        .unwrap();
-    let ecode = child.wait()
-        .expect("failed to wait on child");
-    unsafe {
-        libc::sleep(30);
-    }
+    let matches = App::new("RAProxy")
+        .version("0.1.0")
+        .about("Reloadable HAProxy utility.")
+        .arg(Arg::with_name("haproxy")
+            .help("The path to HAProxy binary.")
+            .long("haproxy")
+            .short("b")
+            .takes_value(true)
+            .validator(path_validator)
+            .required(true))
+        .arg(Arg::with_name("cfg")
+            .help("The path to HAProxy config template.")
+            .long("config")
+            .short("c")
+            .takes_value(true)
+            .validator(path_validator)
+            .required(true))
+        .arg(Arg::with_name("bind")
+            .help("The port bind specification.")
+            .long("bind")
+            .short("a")
+            .validator(|v| {
+                if BindSpec::from_str(&v).is_err() {
+                    return Err(format!("The specification `{}` is an invalid bind spec", v));
+                }
+                Ok(())
+            })
+            .takes_value(true)
+            .required(true)
+            .multiple(true))
+        .get_matches();
+    let config = Config {
+        haproxy: &Path::new(matches.value_of("haproxy").unwrap()),
+        config: &Path::new(matches.value_of("cfg").unwrap()),
+        binds: matches.values_of("bind")
+            .unwrap()
+            .map(|v| BindSpec::from_str(v).unwrap())
+            .collect(),
+    };
+    println!("Config: {:?}", config);
 }
