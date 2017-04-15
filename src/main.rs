@@ -7,6 +7,8 @@ use std::str::FromStr;
 use std::net::SocketAddr;
 use clap::{App, Arg};
 
+const DEFAULT_BACKLOG: usize = 1000;
+
 #[derive(Debug)]
 struct Config<'a> {
     haproxy: &'a Path,
@@ -20,7 +22,6 @@ struct BindSpec {
     backlog: usize,
 }
 
-const DEFAULT_BACKLOG: usize = 1000;
 #[derive(Debug)]
 enum BindSpecError {
     InvalidBindSpec,
