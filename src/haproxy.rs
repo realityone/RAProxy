@@ -48,11 +48,19 @@ impl Listener {
     }
 }
 
-pub fn haproxy_process(cfg: &mut Config) -> Result<Command, HAProxyProcessError> {
+pub fn haproxy_process(cfg: &mut Config,
+                       initial: bool,
+                       pid: Option<u32>)
+                       -> Result<Command, HAProxyProcessError> {
     let mut haproxy = Command::new(cfg.haproxy.as_os_str());
     haproxy.arg("-f").arg(cfg.config.as_os_str());
-    haproxy.env_clear();
+    haproxy.arg("-p").arg(cfg.pid.as_os_str());
+    haproxy.arg("-Ds");
+    if !initial && pid.is_some() {
+        haproxy.arg("-sf").arg(format!("{}", pid.unwrap()));
+    }
 
+    haproxy.env_clear();
     for (_, mut service_spec) in &mut cfg.services {
         if service_spec.fd.is_none() {
             let fd = try!(Listener::listen(&service_spec)

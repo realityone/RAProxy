@@ -8,11 +8,15 @@ mod haproxy;
 
 use std::path::Path;
 use std::str::FromStr;
+use std::thread::sleep;
+use std::time::Duration;
+use std::fs::remove_file;
 
+use nix::errno;
 use clap::{App, Arg};
 
-use config::{Config, ServiceSpec, ConfigError};
 use haproxy::haproxy_process;
+use config::{Config, ServiceSpec, ConfigError};
 
 fn path_validator(v: String) -> Result<(), String> {
     if let Err(e) = Config::validate_path(v) {
@@ -45,6 +49,13 @@ fn main() {
             .help("The path to HAProxy process pid.")
             .long("pid")
             .short("p")
+            .validator(|v| {
+                let p = Path::new(&v);
+                if p.exists() {
+                    try!(remove_file(p).map_err(|e| format!("Remove file `{}` failed: {}", v, e)));
+                }
+                Ok(())
+            })
             .required(false)
             .default_value("/tmp/haproxy.pid"))
         .arg(Arg::with_name("service")
@@ -72,10 +83,24 @@ fn main() {
             })
             .collect(),
     };
+
+    let mut initial = true;
+    let mut cpid = None;
+
+    let mut process = haproxy_process(&mut config, initial, cpid)
+        .expect("Create haproxy process failed");
+    let mut child = process.spawn().expect("Spawn haproxy process failed");
+    cpid = Some(child.id());
+    // let exit_status = child.wait().expect("HAProxy process wasn't running");
+    // println!("HAProxy process exit with code: {}", exit_status);
+    initial = false;
+
     loop {
-        let mut process = haproxy_process(&mut config).expect("Create haproxy process failed");
-        let mut child = process.spawn().expect("Spawn haproxy process failed");
-        let exit_status = child.wait().expect("HAProxy process wasn't running");
-        println!("HAProxy process exit with code: {}", exit_code);
+        let wait_status = nix::sys::wait::wait();
+        if wait_status.is_ok() {
+            println!("Wait status: {:?}", wait_status);
+            continue;
+        }
+        sleep(Duration::new(10, 0));
     }
 }
