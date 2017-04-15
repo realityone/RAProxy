@@ -3,15 +3,15 @@ extern crate clap;
 extern crate nix;
 extern crate regex;
 
+mod config;
+mod haproxy;
+
 use std::path::Path;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 
 use clap::{App, Arg};
-
-mod config;
-mod haproxy;
 
 use config::{Config, ServiceSpec, ConfigError};
 use haproxy::haproxy_process;
