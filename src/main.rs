@@ -23,7 +23,7 @@ struct BindSpec {
 const DEFAULT_BACKLOG: usize = 1000;
 #[derive(Debug)]
 enum BindSpecError {
-    BindSpecInvalid,
+    InvalidBindSpec,
 }
 
 fn path_validator(v: String) -> Result<(), String> {
@@ -43,7 +43,7 @@ impl FromStr for BindSpec {
         if !s.contains(",") {
             let sa = SocketAddr::from_str(&s);
             if sa.is_err() {
-                return Err(BindSpecError::BindSpecInvalid);
+                return Err(BindSpecError::InvalidBindSpec);
             }
             return Ok(BindSpec {
                 addr: sa.unwrap(),
@@ -54,7 +54,7 @@ impl FromStr for BindSpec {
         let sa = SocketAddr::from_str(splited[0]);
         let bl = usize::from_str(splited[1]);
         if sa.is_err() || bl.is_err() {
-            return Err(BindSpecError::BindSpecInvalid);
+            return Err(BindSpecError::InvalidBindSpec);
         }
         Ok(BindSpec {
             addr: sa.unwrap(),
