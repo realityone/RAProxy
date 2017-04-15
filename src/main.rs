@@ -8,8 +8,6 @@ mod haproxy;
 
 use std::path::Path;
 use std::str::FromStr;
-use std::thread::sleep;
-use std::time::Duration;
 
 use clap::{App, Arg};
 
@@ -74,7 +72,10 @@ fn main() {
             })
             .collect(),
     };
-    let mut process = haproxy_process(&config).expect("Create haproxy process failed");
-    let mut child = process.spawn().expect("Spawn haproxy process failed");
-    child.wait();
+    loop {
+        let mut process = haproxy_process(&config).expect("Create haproxy process failed");
+        let mut child = process.spawn().expect("Spawn haproxy process failed");
+        let exit_code = child.wait().expect("HAProxy process wasn't running");
+        println!("HAProxy process exit with code: {}", exit_code);
+    }
 }
