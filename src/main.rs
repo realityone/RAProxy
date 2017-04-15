@@ -1,67 +1,63 @@
 extern crate libc;
 extern crate clap;
 extern crate nix;
+extern crate regex;
 
 use std::path::Path;
 use std::str::FromStr;
-use std::net::SocketAddr;
+use std::os::unix::io::RawFd;
+
 use clap::{App, Arg};
 
-const DEFAULT_BACKLOG: usize = 1000;
+use nix::sys::socket;
+use nix::sys::socket::SetSockOpt;
+
+mod config;
+use config::{Config, ServiceSpec, ConfigError};
+
+struct Listener;
 
 #[derive(Debug)]
-struct Config<'a> {
-    haproxy: &'a Path,
-    config: &'a Path,
-    binds: Vec<BindSpec>,
+enum ListenerError {
+    ListenFailed(nix::Error),
 }
 
-#[derive(Debug)]
-struct BindSpec {
-    addr: SocketAddr,
-    backlog: usize,
-}
+impl Listener {
+    fn listen(service_spec: ServiceSpec) -> Result<RawFd, ListenerError> {
+        let fd = try!(socket::socket(match service_spec.addr.is_ipv4() {
+                                         true => socket::AddressFamily::Inet,
+                                         false => socket::AddressFamily::Inet6,
+                                     },
+                                     socket::SockType::Stream,
+                                     socket::SockFlag::empty(),
+                                     0)
+            .map_err(ListenerError::ListenFailed));
 
-#[derive(Debug)]
-enum BindSpecError {
-    InvalidBindSpec,
+        // set reuse addr
+        {
+            let opt = socket::sockopt::ReuseAddr {};
+            try!(opt.set(fd, &true).map_err(ListenerError::ListenFailed));
+        }
+
+        // listen on specified addr
+        {
+            let addr = socket::InetAddr::from_std(&service_spec.addr);
+            let sock_addr = socket::SockAddr::new_inet(addr);
+            socket::bind(fd, &sock_addr).unwrap();
+            try!(socket::listen(fd, service_spec.backlog).map_err(ListenerError::ListenFailed));
+        }
+
+        Ok(fd)
+    }
 }
 
 fn path_validator(v: String) -> Result<(), String> {
-    let path = Path::new(&v);
-    if !path.is_file() {
-        return Err(format!("Path `{}` is not a regular file", v));
-    }
-    if !path.exists() {
-        return Err(format!("Path `{}` is not exist", v));
+    if let Err(e) = Config::validate_path(v) {
+        return Err(match e {
+            ConfigError::InvalidPath(err) => err,
+        });
     }
     Ok(())
-}
-
-impl FromStr for BindSpec {
-    type Err = BindSpecError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if !s.contains(",") {
-            let sa = SocketAddr::from_str(&s);
-            if sa.is_err() {
-                return Err(BindSpecError::InvalidBindSpec);
-            }
-            return Ok(BindSpec {
-                addr: sa.unwrap(),
-                backlog: DEFAULT_BACKLOG,
-            });
-        }
-        let splited: Vec<&str> = s.splitn(2, ",").collect();
-        let sa = SocketAddr::from_str(splited[0]);
-        let bl = usize::from_str(splited[1]);
-        if sa.is_err() || bl.is_err() {
-            return Err(BindSpecError::InvalidBindSpec);
-        }
-        Ok(BindSpec {
-            addr: sa.unwrap(),
-            backlog: bl.unwrap(),
-        })
-    }
 }
 
 fn main() {
@@ -82,14 +78,13 @@ fn main() {
             .takes_value(true)
             .validator(path_validator)
             .required(true))
-        .arg(Arg::with_name("bind")
-            .help("The port bind specification.")
-            .long("bind")
-            .short("a")
+        .arg(Arg::with_name("service")
+            .help("The service specification.")
+            .long("service")
+            .short("s")
             .validator(|v| {
-                if BindSpec::from_str(&v).is_err() {
-                    return Err(format!("The specification `{}` is an invalid bind spec", v));
-                }
+                try!(ServiceSpec::from_str(&v)
+                    .map_err(|_| format!("The specification `{}` is an invalid service spec", v)));
                 Ok(())
             })
             .takes_value(true)
@@ -99,9 +94,12 @@ fn main() {
     let config = Config {
         haproxy: &Path::new(matches.value_of("haproxy").unwrap()),
         config: &Path::new(matches.value_of("cfg").unwrap()),
-        binds: matches.values_of("bind")
+        services: matches.values_of("service")
             .unwrap()
-            .map(|v| BindSpec::from_str(v).unwrap())
+            .map(|v| {
+                let spec = ServiceSpec::from_str(v).unwrap();
+                (spec.name.clone(), spec)
+            })
             .collect(),
     };
     println!("Config: {:?}", config);
