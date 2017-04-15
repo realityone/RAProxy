@@ -5,51 +5,14 @@ extern crate regex;
 
 use std::path::Path;
 use std::str::FromStr;
-use std::os::unix::io::RawFd;
 
 use clap::{App, Arg};
 
-use nix::sys::socket;
-use nix::sys::socket::SetSockOpt;
-
 mod config;
+mod haproxy;
+
 use config::{Config, ServiceSpec, ConfigError};
-
-struct Listener;
-
-#[derive(Debug)]
-enum ListenerError {
-    ListenFailed(nix::Error),
-}
-
-impl Listener {
-    fn listen(service_spec: ServiceSpec) -> Result<RawFd, ListenerError> {
-        let fd = try!(socket::socket(match service_spec.addr.is_ipv4() {
-                                         true => socket::AddressFamily::Inet,
-                                         false => socket::AddressFamily::Inet6,
-                                     },
-                                     socket::SockType::Stream,
-                                     socket::SockFlag::empty(),
-                                     0)
-            .map_err(ListenerError::ListenFailed));
-
-        // set reuse addr
-        {
-            let opt = socket::sockopt::ReuseAddr {};
-            try!(opt.set(fd, &true).map_err(ListenerError::ListenFailed));
-        }
-
-        // listen on specified addr
-        {
-            let addr = socket::InetAddr::from_std(&service_spec.addr);
-            let sock_addr = socket::SockAddr::new_inet(addr);
-            socket::bind(fd, &sock_addr).unwrap();
-            try!(socket::listen(fd, service_spec.backlog).map_err(ListenerError::ListenFailed));
-        }
-
-        Ok(fd)
-    }
-}
+use haproxy::haproxy_process;
 
 fn path_validator(v: String) -> Result<(), String> {
     if let Err(e) = Config::validate_path(v) {
@@ -102,5 +65,7 @@ fn main() {
             })
             .collect(),
     };
+    let mut process = haproxy_process(&config).expect("Create haproxy process failed");
+    let child = process.spawn().expect("Spawn haproxy process failed");
     println!("Config: {:?}", config);
 }
