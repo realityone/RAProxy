@@ -5,6 +5,8 @@ extern crate regex;
 
 use std::path::Path;
 use std::str::FromStr;
+use std::thread::sleep;
+use std::time::Duration;
 
 use clap::{App, Arg};
 
@@ -41,6 +43,12 @@ fn main() {
             .takes_value(true)
             .validator(path_validator)
             .required(true))
+        .arg(Arg::with_name("pid")
+            .help("The path to HAProxy process pid.")
+            .long("pid")
+            .short("p")
+            .required(false)
+            .default_value("/tmp/haproxy.pid"))
         .arg(Arg::with_name("service")
             .help("The service specification.")
             .long("service")
@@ -57,6 +65,7 @@ fn main() {
     let config = Config {
         haproxy: &Path::new(matches.value_of("haproxy").unwrap()),
         config: &Path::new(matches.value_of("cfg").unwrap()),
+        pid: &Path::new(matches.value_of("pid").unwrap()),
         services: matches.values_of("service")
             .unwrap()
             .map(|v| {
@@ -66,6 +75,6 @@ fn main() {
             .collect(),
     };
     let mut process = haproxy_process(&config).expect("Create haproxy process failed");
-    let child = process.spawn().expect("Spawn haproxy process failed");
-    println!("Config: {:?}", config);
+    let mut child = process.spawn().expect("Spawn haproxy process failed");
+    child.wait();
 }

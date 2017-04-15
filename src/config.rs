@@ -11,6 +11,7 @@ const DEFAULT_BACKLOG: usize = 1000;
 pub struct Config<'a> {
     pub haproxy: &'a Path,
     pub config: &'a Path,
+    pub pid: &'a Path,
     pub services: HashMap<String, ServiceSpec>,
 }
 
