@@ -51,6 +51,7 @@ impl Listener {
 pub fn haproxy_process(cfg: &mut Config) -> Result<Command, HAProxyProcessError> {
     let mut haproxy = Command::new(cfg.haproxy.as_os_str());
     haproxy.arg("-f").arg(cfg.config.as_os_str());
+    haproxy.env_clear();
 
     for (_, mut service_spec) in &mut cfg.services {
         if service_spec.fd.is_none() {
