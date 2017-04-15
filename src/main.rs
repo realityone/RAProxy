@@ -31,9 +31,9 @@ fn main() {
     let matches = App::new("RAProxy")
         .version("0.1.0")
         .about("Reloadable HAProxy utility.")
-        .arg(Arg::with_name("haproxy")
+        .arg(Arg::with_name("binary")
             .help("The path to HAProxy binary.")
-            .long("haproxy")
+            .long("binary")
             .short("b")
             .takes_value(true)
             .validator(path_validator)
@@ -72,7 +72,7 @@ fn main() {
             .multiple(true))
         .get_matches();
     let mut config = Config {
-        haproxy: &Path::new(matches.value_of("haproxy").unwrap()),
+        binary: &Path::new(matches.value_of("binary").unwrap()),
         config: &Path::new(matches.value_of("cfg").unwrap()),
         pid: &Path::new(matches.value_of("pid").unwrap()),
         services: matches.values_of("service")

@@ -52,7 +52,7 @@ pub fn haproxy_process(cfg: &mut Config,
                        initial: bool,
                        pid: Option<u32>)
                        -> Result<Command, HAProxyProcessError> {
-    let mut haproxy = Command::new(cfg.haproxy.as_os_str());
+    let mut haproxy = Command::new(cfg.binary.as_os_str());
     haproxy.arg("-f").arg(cfg.config.as_os_str());
     haproxy.arg("-p").arg(cfg.pid.as_os_str());
     haproxy.arg("-Ds");
