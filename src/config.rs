@@ -1,8 +1,7 @@
 use std::path::Path;
 use std::str::FromStr;
 use std::net::SocketAddr;
-use std::os::unix::io::RawFd;
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use regex::Regex;
 
@@ -13,15 +12,14 @@ pub struct Config<'a> {
     pub binary: &'a Path,
     pub config: &'a Path,
     pub pid: &'a Path,
-    pub services: HashMap<String, ServiceSpec>,
+    pub services: HashSet<ServiceSpec>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, Eq, PartialEq)]
 pub struct ServiceSpec {
     pub name: String,
     pub addr: SocketAddr,
     pub backlog: usize,
-    pub fd: Option<RawFd>,
 }
 
 #[derive(Debug)]
@@ -68,7 +66,6 @@ impl FromStr for ServiceSpec {
             addr: try!(SocketAddr::from_str(&caps["addr"])
                 .map_err(|_| ServiceSpecError::InvalidServiceSpec)),
             backlog: backlog,
-            fd: None,
         })
     }
 }

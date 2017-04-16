@@ -1,5 +1,9 @@
-use std::process::Command;
+use std::{io, fs, num};
+use std::io::Read;
+use std::str::FromStr;
 use std::os::unix::io::RawFd;
+use std::collections::HashMap;
+use std::process::{Command, Child};
 
 use nix;
 use nix::sys::socket;
@@ -10,13 +14,23 @@ use config::{Config, ServiceSpec};
 struct Listener;
 
 #[derive(Debug)]
+pub struct HAProxy<'a> {
+    config: &'a Config<'a>,
+    services: HashMap<&'a ServiceSpec, RawFd>,
+    pub process: Option<Child>,
+}
+
+#[derive(Debug)]
 pub enum ListenerError {
     ListenFailed(nix::Error),
 }
 
 #[derive(Debug)]
 pub enum HAProxyProcessError {
-    CreateHAProxyFailed(ListenerError),
+    CreateCommandFailed(ListenerError),
+    StartCommandFailed(io::Error),
+    ReadWorkerPIDFailed(io::Error),
+    InvalidPID(num::ParseIntError),
 }
 
 impl Listener {
@@ -48,27 +62,50 @@ impl Listener {
     }
 }
 
-pub fn haproxy_process(cfg: &mut Config,
-                       initial: bool,
-                       pid: Option<u32>)
-                       -> Result<Command, HAProxyProcessError> {
-    let mut haproxy = Command::new(cfg.binary.as_os_str());
-    haproxy.arg("-f").arg(cfg.config.as_os_str());
-    haproxy.arg("-p").arg(cfg.pid.as_os_str());
-    haproxy.arg("-Ds");
-    if !initial && pid.is_some() {
-        haproxy.arg("-sf").arg(format!("{}", pid.unwrap()));
+impl<'a> HAProxy<'a> {
+    pub fn from_config(config: &'a Config) -> Self {
+        HAProxy {
+            config: config,
+            services: Default::default(),
+            process: None,
+        }
     }
 
-    haproxy.env_clear();
-    for (_, mut service_spec) in &mut cfg.services {
-        if service_spec.fd.is_none() {
-            let fd = try!(Listener::listen(&service_spec)
-                .map_err(HAProxyProcessError::CreateHAProxyFailed));
-            service_spec.fd = Some(fd);
-        }
-        haproxy.env(service_spec.name.clone(),
-                    format!("{}", service_spec.fd.unwrap()));
+    pub fn worker_pid(&self) -> Result<u32, HAProxyProcessError> {
+        let mut pid_data = String::new();
+        let mut fp = try!(fs::File::open(self.config.pid)
+            .map_err(HAProxyProcessError::ReadWorkerPIDFailed));
+        try!(fp.read_to_string(&mut pid_data).map_err(HAProxyProcessError::ReadWorkerPIDFailed));
+        u32::from_str(&pid_data.trim()).map_err(HAProxyProcessError::InvalidPID)
     }
-    Ok(haproxy)
+
+    fn create_command(&mut self) -> Result<Command, HAProxyProcessError> {
+        let mut haproxy = Command::new(self.config.binary.as_os_str());
+        haproxy.arg("-f").arg(self.config.config.as_os_str());
+        haproxy.arg("-p").arg(self.config.pid.as_os_str());
+        haproxy.arg("-Ds");
+        if let Some(ref process) = self.process {
+            let worker_pid = try!(self.worker_pid());
+            haproxy.arg("-sf").arg(format!("{}", worker_pid));
+        }
+
+        haproxy.env_clear();
+        for spec in self.config.services.iter() {
+            let fd;
+            if !self.services.contains_key(spec) {
+                fd = try!(Listener::listen(spec).map_err(HAProxyProcessError::CreateCommandFailed));
+                self.services.insert(spec, fd);
+            } else {
+                fd = self.services[spec];
+            }
+            haproxy.env(spec.name.clone(), format!("{}", fd));
+        }
+        Ok(haproxy)
+    }
+
+    pub fn start_process(&mut self) -> Result<&mut Option<Child>, HAProxyProcessError> {
+        let mut command = try!(self.create_command());
+        self.process = Some(try!(command.spawn().map_err(HAProxyProcessError::StartCommandFailed)));
+        Ok(&mut self.process)
+    }
 }

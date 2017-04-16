@@ -6,16 +6,19 @@ extern crate regex;
 mod config;
 mod haproxy;
 
+use std::panic;
 use std::path::Path;
+use std::sync::Mutex;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 use std::fs::remove_file;
+use std::collections::HashSet;
 
 use nix::errno;
 use clap::{App, Arg};
 
-use haproxy::haproxy_process;
+use haproxy::HAProxy;
 use config::{Config, ServiceSpec, ConfigError};
 
 fn path_validator(v: String) -> Result<(), String> {
@@ -27,7 +30,9 @@ fn path_validator(v: String) -> Result<(), String> {
     Ok(())
 }
 
+
 fn main() {
+    let service_names = Mutex::new(HashSet::new());
     let matches = App::new("RAProxy")
         .version("0.1.0")
         .about("Reloadable HAProxy utility.")
@@ -62,38 +67,37 @@ fn main() {
             .help("The service specification.")
             .long("service")
             .short("s")
-            .validator(|v| {
-                try!(ServiceSpec::from_str(&v)
+            .validator(move |v| {
+                let s = try!(ServiceSpec::from_str(&v)
                     .map_err(|_| format!("The specification `{}` is an invalid service spec", v)));
+                let mut service_names = service_names.lock().unwrap();
+                if service_names.contains(&s.name) {
+                    return Err(format!("Service `{}` already exist", s.name));
+                }
+                service_names.insert(s.name);
                 Ok(())
             })
             .takes_value(true)
             .required(true)
             .multiple(true))
         .get_matches();
-    let mut config = Config {
+    let config = Config {
         binary: &Path::new(matches.value_of("binary").unwrap()),
         config: &Path::new(matches.value_of("cfg").unwrap()),
         pid: &Path::new(matches.value_of("pid").unwrap()),
         services: matches.values_of("service")
             .unwrap()
-            .map(|v| {
-                let spec = ServiceSpec::from_str(v).unwrap();
-                (spec.name.clone(), spec)
-            })
+            .map(|v| ServiceSpec::from_str(v).unwrap())
             .collect(),
     };
 
-    let mut initial = true;
-    let mut cpid = None;
-
-    let mut process = haproxy_process(&mut config, initial, cpid)
-        .expect("Create haproxy process failed");
-    let mut child = process.spawn().expect("Spawn haproxy process failed");
-    cpid = Some(child.id());
-    // let exit_status = child.wait().expect("HAProxy process wasn't running");
-    // println!("HAProxy process exit with code: {}", exit_status);
-    initial = false;
+    let mut haproxy = HAProxy::from_config(&config);
+    let child = haproxy.start_process().expect("Start HAProxy process failed");
+    if let &mut Some(ref mut child) = child {
+        println!("HAProxy process started: PID {}", child.id());
+    } else {
+        panic!("HAProxy process not exist");
+    }
 
     loop {
         let wait_status = nix::sys::wait::wait();
@@ -101,6 +105,6 @@ fn main() {
             println!("Wait status: {:?}", wait_status);
             continue;
         }
-        sleep(Duration::new(10, 0));
+        sleep(Duration::new(10, 0))
     }
 }
