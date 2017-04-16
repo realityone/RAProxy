@@ -63,7 +63,7 @@ impl Listener {
 }
 
 impl<'a> HAProxy<'a> {
-    pub fn from_config(config: &'a Config) -> Self {
+    pub fn init_from_config(config: &'a Config) -> Self {
         HAProxy {
             config: config,
             services: Default::default(),
@@ -84,7 +84,7 @@ impl<'a> HAProxy<'a> {
         haproxy.arg("-f").arg(self.config.config.as_os_str());
         haproxy.arg("-p").arg(self.config.pid.as_os_str());
         haproxy.arg("-Ds");
-        if let Some(ref process) = self.process {
+        if self.process.is_some() {
             let worker_pid = try!(self.worker_pid());
             haproxy.arg("-sf").arg(format!("{}", worker_pid));
         }

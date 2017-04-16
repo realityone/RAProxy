@@ -6,7 +6,7 @@ extern crate regex;
 mod config;
 mod haproxy;
 
-use std::panic;
+use std::thread;
 use std::path::Path;
 use std::sync::Mutex;
 use std::str::FromStr;
@@ -15,7 +15,8 @@ use std::time::Duration;
 use std::fs::remove_file;
 use std::collections::HashSet;
 
-use nix::errno;
+use nix::sys::wait;
+use nix::sys::signal;
 use clap::{App, Arg};
 
 use haproxy::HAProxy;
@@ -30,8 +31,17 @@ fn path_validator(v: String) -> Result<(), String> {
     Ok(())
 }
 
-
 fn main() {
+    thread::spawn(move || {
+        loop {
+            if let Ok(status) = wait::wait() {
+                println!("Process exited: {:?}", status);
+                continue;
+            }
+            sleep(Duration::new(10, 0));
+        }
+    });
+
     let service_names = Mutex::new(HashSet::new());
     let matches = App::new("RAProxy")
         .version("0.1.0")
@@ -91,20 +101,30 @@ fn main() {
             .collect(),
     };
 
-    let mut haproxy = HAProxy::from_config(&config);
-    let child = haproxy.start_process().expect("Start HAProxy process failed");
-    if let &mut Some(ref mut child) = child {
-        println!("HAProxy process started: PID {}", child.id());
-    } else {
-        panic!("HAProxy process not exist");
+    let mut haproxy = HAProxy::init_from_config(&config);
+    {
+        let child = haproxy.start_process().expect("Start HAProxy process failed");
+        if let &mut Some(ref mut child) = child {
+            println!("HAProxy process started: PID {}", child.id());
+        } else {
+            panic!("HAProxy process not exist");
+        }
     }
 
+    let mut mask = signal::SigSet::empty();
+    mask.add(signal::SIGHUP);
     loop {
-        let wait_status = nix::sys::wait::wait();
-        if wait_status.is_ok() {
-            println!("Wait status: {:?}", wait_status);
-            continue;
+        let sig = mask.wait().expect("Wait signal failed");
+        match sig {
+            signal::SIGHUP => {
+                let child = haproxy.start_process().expect("Start HAProxy process failed");
+                if let &mut Some(ref mut child) = child {
+                    println!("HAProxy process started: PID {}", child.id());
+                } else {
+                    panic!("HAProxy process not exist");
+                }
+            }
+            _ => println!("Unexpected signal: {:?}", sig),
         }
-        sleep(Duration::new(10, 0))
     }
 }
