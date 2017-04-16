@@ -131,7 +131,7 @@ fn main() {
             signal::SIGHUP => {
                 start_haproxy_process(&mut haproxy);
             }
-            _ => println!("Unexpected signal: {:?}", sig),
+            _ => unreachable!("Unexpected signal: {:?}", sig),
         }
     }
 }
