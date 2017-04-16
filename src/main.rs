@@ -99,6 +99,16 @@ fn cleanup_loop() {
     }
 }
 
+fn start_haproxy_process(haproxy: &mut HAProxy) {
+    let child = haproxy.start_process().expect("Start HAProxy process failed");
+    if let &mut Some(ref mut child) = child {
+        println!("HAProxy process started: PID {}", child.id());
+        thread::spawn(move || cleanup_loop());
+    } else {
+        panic!("HAProxy process not exist");
+    }
+}
+
 fn main() {
     let (binary, config, pid, services) = config_from_cli();
     let config = Config {
@@ -111,15 +121,7 @@ fn main() {
     };
 
     let mut haproxy = HAProxy::init_from_config(&config);
-    {
-        let child = haproxy.start_process().expect("Start HAProxy process failed");
-        if let &mut Some(ref mut child) = child {
-            println!("HAProxy process started: PID {}", child.id());
-            thread::spawn(move || cleanup_loop());
-        } else {
-            panic!("HAProxy process not exist");
-        }
-    }
+    start_haproxy_process(&mut haproxy);
 
     let mut mask = signal::SigSet::empty();
     mask.add(signal::SIGHUP);
@@ -127,12 +129,7 @@ fn main() {
         let sig = mask.wait().expect("Wait signal failed");
         match sig {
             signal::SIGHUP => {
-                let child = haproxy.start_process().expect("Start HAProxy process failed");
-                if let &mut Some(ref mut child) = child {
-                    println!("HAProxy process started: PID {}", child.id());
-                } else {
-                    panic!("HAProxy process not exist");
-                }
+                start_haproxy_process(&mut haproxy);
             }
             _ => println!("Unexpected signal: {:?}", sig),
         }
