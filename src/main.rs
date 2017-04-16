@@ -5,7 +5,7 @@ extern crate regex;
 mod config;
 mod haproxy;
 
-use std::thread;
+use std::{thread, process};
 use std::path::Path;
 use std::sync::Mutex;
 use std::str::FromStr;
@@ -120,11 +120,25 @@ fn main() {
 
     let mut mask = signal::SigSet::empty();
     mask.add(signal::SIGHUP);
+    mask.add(signal::SIGTERM);
+    mask.add(signal::SIGINT);
     loop {
         let sig = mask.wait().expect("Wait signal failed");
         match sig {
             signal::SIGHUP => {
                 start_haproxy_process(&mut haproxy);
+            }
+            signal::SIGTERM | signal::SIGINT => {
+                if let Ok(pid) = haproxy.worker_pid() {
+                    if let Err(e) = signal::kill(pid as i32, signal::SIGUSR1) {
+                        println!("Stop HAProxy process failed: {}", e);
+                    }
+                    if let Err(e) = remove_file(haproxy.config.pid) {
+                        println!("Remove HAProxy PID file failed: {}", e);
+                    }
+                }
+                println!("RAProxy exited.");
+                process::exit(1);
             }
             _ => unreachable!("Unexpected signal: {:?}", sig),
         }

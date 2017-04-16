@@ -15,7 +15,7 @@ struct Listener;
 
 #[derive(Debug)]
 pub struct HAProxy<'a> {
-    config: &'a Config<'a>,
+    pub config: &'a Config<'a>,
     services: HashMap<&'a ServiceSpec, RawFd>,
     pub process: Option<Child>,
 }
