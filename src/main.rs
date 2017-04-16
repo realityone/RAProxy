@@ -31,17 +31,7 @@ fn path_validator(v: String) -> Result<(), String> {
     Ok(())
 }
 
-fn main() {
-    thread::spawn(move || {
-        loop {
-            if let Ok(status) = wait::wait() {
-                println!("Process exited: {:?}", status);
-                continue;
-            }
-            sleep(Duration::new(10, 0));
-        }
-    });
-
+fn config_from_cli() -> (String, String, String, Vec<String>) {
     let service_names = Mutex::new(HashSet::new());
     let matches = App::new("RAProxy")
         .version("0.1.0")
@@ -91,12 +81,32 @@ fn main() {
             .required(true)
             .multiple(true))
         .get_matches();
+    (matches.value_of("binary").unwrap().to_string(),
+     matches.value_of("cfg").unwrap().to_string(),
+     matches.value_of("pid").unwrap().to_string(),
+     matches.values_of("service")
+        .unwrap()
+        .map(|v| v.to_string())
+        .collect())
+}
+
+fn cleanup_loop() {
+    loop {
+        if let Ok(status) = wait::wait() {
+            println!("Process exited: {:?}", status);
+            continue;
+        }
+        sleep(Duration::new(10, 0));
+    }
+}
+
+fn main() {
+    let (binary, config, pid, services) = config_from_cli();
     let config = Config {
-        binary: &Path::new(matches.value_of("binary").unwrap()),
-        config: &Path::new(matches.value_of("cfg").unwrap()),
-        pid: &Path::new(matches.value_of("pid").unwrap()),
-        services: matches.values_of("service")
-            .unwrap()
+        binary: &Path::new(&binary),
+        config: &Path::new(&config),
+        pid: &Path::new(&pid),
+        services: services.iter()
             .map(|v| ServiceSpec::from_str(v).unwrap())
             .collect(),
     };
@@ -106,6 +116,7 @@ fn main() {
         let child = haproxy.start_process().expect("Start HAProxy process failed");
         if let &mut Some(ref mut child) = child {
             println!("HAProxy process started: PID {}", child.id());
+            thread::spawn(move || cleanup_loop());
         } else {
             panic!("HAProxy process not exist");
         }
