@@ -110,14 +110,8 @@ fn start_haproxy_process(haproxy: &mut HAProxy) {
 
 fn main() {
     let (binary, config, pid, services) = config_from_cli();
-    let config = Config {
-        binary: &Path::new(&binary),
-        config: &Path::new(&config),
-        pid: &Path::new(&pid),
-        services: services.iter()
-            .map(|v| ServiceSpec::from_str(v).unwrap())
-            .collect(),
-    };
+    let services: Vec<&str> = services.iter().map(|s| s.as_ref()).collect();
+    let config = Config::new(&binary, &config, &pid, services.as_slice());
 
     let mut haproxy = HAProxy::init_from_config(&config);
     start_haproxy_process(&mut haproxy);

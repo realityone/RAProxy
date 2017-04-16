@@ -33,6 +33,17 @@ pub enum ServiceSpecError {
 }
 
 impl<'a> Config<'a> {
+    pub fn new(binary: &'a str, config: &'a str, pid: &'a str, services: &'a [&'a str]) -> Self {
+        Config {
+            binary: &Path::new(binary),
+            config: &Path::new(config),
+            pid: &Path::new(pid),
+            services: services.iter()
+                .map(|v| ServiceSpec::from_str(v).unwrap())
+                .collect(),
+        }
+    }
+
     pub fn validate_path(v: String) -> Result<(), ConfigError> {
         let path = Path::new(&v);
         if !path.is_file() {
