@@ -103,7 +103,6 @@ fn start_haproxy_process(haproxy: &mut HAProxy) {
     let child = haproxy.start_process().expect("Start HAProxy process failed");
     if let &mut Some(ref mut child) = child {
         println!("HAProxy process started: PID {}", child.id());
-        thread::spawn(move || cleanup_loop());
     } else {
         panic!("HAProxy process not exist");
     }
@@ -122,6 +121,8 @@ fn main() {
 
     let mut haproxy = HAProxy::init_from_config(&config);
     start_haproxy_process(&mut haproxy);
+    // start clean up loop
+    thread::spawn(move || cleanup_loop());
 
     let mut mask = signal::SigSet::empty();
     mask.add(signal::SIGHUP);
