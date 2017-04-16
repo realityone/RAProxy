@@ -54,7 +54,7 @@ impl Listener {
         {
             let addr = socket::InetAddr::from_std(&service_spec.addr);
             let sock_addr = socket::SockAddr::new_inet(addr);
-            socket::bind(fd, &sock_addr).unwrap();
+            try!(socket::bind(fd, &sock_addr).map_err(ListenerError::ListenFailed));
             try!(socket::listen(fd, service_spec.backlog).map_err(ListenerError::ListenFailed));
         }
 
