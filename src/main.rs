@@ -1,4 +1,3 @@
-extern crate libc;
 extern crate clap;
 extern crate nix;
 extern crate regex;
