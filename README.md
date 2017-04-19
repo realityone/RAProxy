@@ -1,6 +1,6 @@
 # RAProxy
 
-Reloadable HAProxy inspire from [multibinder](https://github.com/github/multibinder).
+Reloadable HAProxy inspired from [multibinder](https://github.com/github/multibinder).
 
 ## Usage
 
