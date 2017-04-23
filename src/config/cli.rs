@@ -96,3 +96,7 @@ fn path_validator(v: String) -> Result<(), String> {
     }
     Ok(())
 }
+
+pub fn new() -> CommandLine {
+    CommandLine::new()
+}

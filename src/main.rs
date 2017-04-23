@@ -45,7 +45,7 @@ fn main() {
     }
     env_logger::init().expect("Init logger failed");
 
-    let builder = config::cli::CommandLine::new();
+    let builder = config::cli::new();
     let config = builder.build();
 
     let mut haproxy = HAProxy::init_from_config(&config);
