@@ -14,8 +14,7 @@ use std::time::Duration;
 use std::fs::remove_file;
 use std::{thread, process, env};
 
-use nix::sys::wait;
-use nix::sys::signal;
+use nix::sys::{wait, signal};
 
 use haproxy::HAProxy;
 use config::ConfigBuilder;
