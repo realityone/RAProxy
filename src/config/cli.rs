@@ -24,7 +24,7 @@ impl ConfigBuilder for CommandLine {
 }
 
 impl CommandLine {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let service_names = Mutex::new(HashSet::new());
         let matches = App::new("RAProxy")
             .version("0.1.0")
