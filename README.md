@@ -1,5 +1,7 @@
 # RAProxy
 
+[![Build Status](https://travis-ci.org/realityone/RAProxy.svg?branch=master)](https://travis-ci.org/realityone/RAProxy)
+
 Reloadable HAProxy inspired from [multibinder](https://github.com/github/multibinder).
 
 ## Requirements
@@ -127,5 +129,11 @@ INFO:raproxy: Process exited: Exited(46972, 0)
 * [ ] Auto detect HAProxy binary.
 * [ ] Reload RAProxy self.
 * [ ] Integrate with SystemD.
+
+## Reference
+
+- [GLB part 2: HAProxy zero-downtime, zero-delay reloads with multibinder](https://githubengineering.com/glb-part-2-haproxy-zero-downtime-zero-delay-reloads-with-multibinder/)
+- [SO_REUSEADDR option](http://man7.org/linux/man-pages/man7/socket.7.html#SO_REUSEADDR)
+
 
 
