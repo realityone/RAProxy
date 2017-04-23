@@ -45,10 +45,6 @@ fn main() {
     }
     env_logger::init().expect("Init logger failed");
 
-    // let (binary, config, pid, services) = config_from_cli();
-    // let services: Vec<&str> = services.iter().map(|s| s.as_ref()).collect();
-    // let config = Config::new(&binary, &config, &pid, services.as_slice());
-
     let builder = config::cli::CommandLine::new();
     let config = builder.build();
 
