@@ -1,3 +1,7 @@
+#[macro_use]
+extern crate log;
+extern crate env_logger;
+
 extern crate clap;
 extern crate nix;
 extern crate regex;
@@ -5,7 +9,6 @@ extern crate regex;
 mod config;
 mod haproxy;
 
-use std::{thread, process};
 use std::path::Path;
 use std::sync::Mutex;
 use std::str::FromStr;
@@ -13,6 +16,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::fs::remove_file;
 use std::collections::HashSet;
+use std::{thread, process, env};
 
 use nix::sys::wait;
 use nix::sys::signal;
@@ -92,7 +96,7 @@ fn config_from_cli() -> (String, String, String, Vec<String>) {
 fn cleanup_loop() {
     loop {
         if let Ok(status) = wait::wait() {
-            println!("Process exited: {:?}", status);
+            info!("Process exited: {:?}", status);
             continue;
         }
         sleep(Duration::new(10, 0));
@@ -102,13 +106,18 @@ fn cleanup_loop() {
 fn start_haproxy_process(haproxy: &mut HAProxy) {
     let child = haproxy.start_process().expect("Start HAProxy process failed");
     if let &mut Some(ref mut child) = child {
-        println!("HAProxy process started: PID {}", child.id());
+        info!("HAProxy process started: PID {}", child.id());
     } else {
         panic!("HAProxy process not exist");
     }
 }
 
 fn main() {
+    if let Err(_) = env::var("RUST_LOG") {
+        env::set_var("RUST_LOG", "info");
+    }
+    env_logger::init().expect("Init logger failed");
+
     let (binary, config, pid, services) = config_from_cli();
     let services: Vec<&str> = services.iter().map(|s| s.as_ref()).collect();
     let config = Config::new(&binary, &config, &pid, services.as_slice());
@@ -131,13 +140,13 @@ fn main() {
             signal::SIGTERM | signal::SIGINT => {
                 if let Ok(pid) = haproxy.worker_pid() {
                     if let Err(e) = signal::kill(pid as i32, signal::SIGUSR1) {
-                        println!("Stop HAProxy process failed: {}", e);
+                        error!("Stop HAProxy process failed: {}", e);
                     }
                     if let Err(e) = remove_file(haproxy.config.pid) {
-                        println!("Remove HAProxy PID file failed: {}", e);
+                        error!("Remove HAProxy PID file failed: {}", e);
                     }
                 }
-                println!("RAProxy exited.");
+                info!("RAProxy exited.");
                 process::exit(1);
             }
             _ => unreachable!("Unexpected signal: {:?}", sig),
