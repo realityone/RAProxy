@@ -5,6 +5,8 @@ use std::collections::HashSet;
 
 use regex::Regex;
 
+pub mod cli;
+
 const DEFAULT_BACKLOG: usize = 1000;
 
 #[derive(Debug)]
@@ -32,8 +34,12 @@ pub enum ServiceSpecError {
     InvalidServiceSpec,
 }
 
+pub trait ConfigBuilder {
+    fn build(&self) -> Config;
+}
+
 impl<'a> Config<'a> {
-    pub fn new(binary: &'a str, config: &'a str, pid: &'a str, services: &'a [&'a str]) -> Self {
+    pub fn new(binary: &'a str, config: &'a str, pid: &'a str, services: Vec<&'a str>) -> Self {
         Config {
             binary: &Path::new(binary),
             config: &Path::new(config),
