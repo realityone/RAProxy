@@ -1,8 +1,10 @@
-use std::path::Path;
+use std::env;
 use std::sync::Mutex;
 use std::str::FromStr;
 use std::fs::remove_file;
+use std::os::unix::prelude::*;
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 use clap::{App, Arg};
 
@@ -14,6 +16,38 @@ pub struct CommandLine {
     cfg: String,
     pid: String,
     services: Vec<String>,
+}
+
+fn detect_haproxy() -> Option<PathBuf> {
+    let paths = match env::var_os("PATH") {
+        Some(path) => env::split_paths(&path).collect::<Vec<_>>(),
+        None => vec![],
+    };
+
+    for p in &paths {
+        let mut target = p.clone();
+        target.push("haproxy");
+
+        // file not exists
+        if !target.exists() {
+            continue;
+        }
+
+        let metadata = target.metadata();
+        if metadata.is_err() {
+            return None;
+        }
+        let metadata = metadata.unwrap();
+        if metadata.mode() & 0o111 == 0 {
+            // Not an executable file
+            continue;
+        }
+
+        // Find an executable file
+        return Some(target);
+    }
+
+    None
 }
 
 impl ConfigBuilder for CommandLine {
@@ -35,7 +69,7 @@ impl CommandLine {
                 .short("b")
                 .takes_value(true)
                 .validator(path_validator)
-                .required(true))
+                .required(false))
             .arg(Arg::with_name("cfg")
                 .help("The path to HAProxy config template.")
                 .long("config")
@@ -76,8 +110,19 @@ impl CommandLine {
                 .required(true)
                 .multiple(true))
             .get_matches();
+
+        // Auto detect HAProxy from PATH
+        let mut binary = matches.value_of("binary").map(|b| b.to_string());
+        if binary.is_none() {
+            let detectd = detect_haproxy();
+            if detectd.is_none() {
+                panic!("Can't find HAProxy binary");
+            }
+            binary = detectd.map(|p| p.to_string_lossy().into_owned());
+        }
+
         CommandLine {
-            binary: matches.value_of("binary").unwrap().to_string(),
+            binary: binary.unwrap(),
             cfg: matches.value_of("cfg").unwrap().to_string(),
             pid: matches.value_of("pid").unwrap().to_string(),
             services: matches.values_of("service")
