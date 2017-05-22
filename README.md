@@ -126,7 +126,7 @@ INFO:raproxy: Process exited: Exited(46972, 0)
 
 ## TODO
 
-* [ ] Auto detect HAProxy binary.
+* [x] Auto detect HAProxy binary.
 * [ ] Reload RAProxy self.
 * [ ] Integrate with SystemD.
 
